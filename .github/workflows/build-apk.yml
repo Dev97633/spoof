@@ -11,15 +11,18 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Set up JDK
-      uses: actions/setup-java@v3
+      uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: Grant execute permission to Gradle wrapper (if present)
+    - name: Install Android Build Tools (zipalign + apksigner)
+      run: sudo apt-get update && sudo apt-get install -y zipalign apksigner
+
+    - name: Grant execute permission to Gradle wrapper
       run: if [ -f ./gradlew ]; then chmod +x ./gradlew; fi
 
     - name: Build Debug APK
@@ -30,20 +33,36 @@ jobs:
 
     - name: Generate Signing Keystore
       run: |
-        keytool -genkeypair -v         -keystore release.keystore         -storepass android         -keypass android         -alias mykey         -keyalg RSA         -keysize 2048         -validity 10000         -dname "CN=App,O=Dev,C=IN"
+        keytool -genkeypair -v \
+        -keystore release.keystore \
+        -storepass android \
+        -keypass android \
+        -alias mykey \
+        -keyalg RSA \
+        -keysize 2048 \
+        -validity 10000 \
+        -dname "CN=App,O=Dev,C=IN"
 
     - name: Sign the APK (if exists)
       run: |
-        if [ -f app/build/outputs/apk/release/app-release-unsigned.apk ]; then           jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore release.keystore -storepass android app/build/outputs/apk/release/app-release-unsigned.apk mykey;           zipalign -v -p 4 app/build/outputs/apk/release/app-release-unsigned.apk LauncherApp-release.apk;         fi
+        if [ -f app/build/outputs/apk/release/app-release-unsigned.apk ]; then
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+          -keystore release.keystore -storepass android \
+          app/build/outputs/apk/release/app-release-unsigned.apk mykey;
+
+          zipalign -v -p 4 \
+          app/build/outputs/apk/release/app-release-unsigned.apk \
+          LauncherApp-release.apk;
+        fi
 
     - name: Upload APK Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: LauncherApp-release.apk
+        name: LauncherApp-release
         path: LauncherApp-release.apk
 
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: "v1.${{ github.run_number }}"
         files: LauncherApp-release.apk
