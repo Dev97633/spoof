@@ -11,41 +11,65 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Set up JDK
-      uses: actions/setup-java@v3
+      uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: Grant execute permission to Gradle wrapper (if present)
-      run: if [ -f ./gradlew ]; then chmod +x ./gradlew; fi
+    - name: Make Gradle executable
+      run: chmod +x ./gradlew
 
     - name: Build Debug APK
-      run: ./gradlew assembleDebug || true
+      run: ./gradlew assembleDebug
 
     - name: Build Release APK (unsigned)
-      run: ./gradlew assembleRelease || true
+      run: ./gradlew assembleRelease
 
     - name: Generate Signing Keystore
       run: |
-        keytool -genkeypair -v         -keystore release.keystore         -storepass android         -keypass android         -alias mykey         -keyalg RSA         -keysize 2048         -validity 10000         -dname "CN=App,O=Dev,C=IN"
+        keytool -genkeypair -v \
+        -keystore release.keystore \
+        -storepass android \
+        -keypass android \
+        -alias mykey \
+        -keyalg RSA \
+        -keysize 2048 \
+        -validity 10000 \
+        -dname "CN=App,O=Dev,C=IN"
 
-    - name: Sign the APK (if exists)
+    - name: Sign & Align Release APK
       run: |
-        if [ -f app/build/outputs/apk/release/app-release-unsigned.apk ]; then           jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore release.keystore -storepass android app/build/outputs/apk/release/app-release-unsigned.apk mykey;           zipalign -v -p 4 app/build/outputs/apk/release/app-release-unsigned.apk LauncherApp-release.apk;         fi
+        if [ -f app/build/outputs/apk/release/app-release-unsigned.apk ]; then
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+          -keystore release.keystore -storepass android \
+          app/build/outputs/apk/release/app-release-unsigned.apk mykey
 
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v3
+          zipalign -v -p 4 \
+          app/build/outputs/apk/release/app-release-unsigned.apk \
+          LauncherApp-release.apk
+        else
+          echo "Release APK missing — skipping signing"
+        fi
+
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
       with:
-        name: LauncherApp-release.apk
-        path: LauncherApp-release.apk
+        name: Built-APKs
+        path: |
+          app/build/outputs/apk/debug/*.apk
+          LauncherApp-release.apk
+        if-no-files-found: warn
 
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      if: success()
       with:
         tag_name: "v1.${{ github.run_number }}"
-        files: LauncherApp-release.apk
+        files: |
+          app/build/outputs/apk/debug/*.apk
+          LauncherApp-release.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
