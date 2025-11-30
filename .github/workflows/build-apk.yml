@@ -5,6 +5,10 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+permissions:
+  contents: write   # REQUIRED to fix the 403 release error
+  id-token: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,17 +23,17 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: Install Android Build Tools (zipalign + apksigner)
-      run: sudo apt-get update && sudo apt-get install -y zipalign apksigner
-
-    - name: Grant execute permission to Gradle wrapper
+    - name: Grant execute permission to Gradle wrapper (if present)
       run: if [ -f ./gradlew ]; then chmod +x ./gradlew; fi
 
     - name: Build Debug APK
       run: ./gradlew assembleDebug || true
 
-    - name: Build Release APK (unsigned)
+    - name: Build Release APK
       run: ./gradlew assembleRelease || true
+
+    - name: Debug – List APK files
+      run: find . -name "*.apk" -print
 
     - name: Generate Signing Keystore
       run: |
@@ -43,16 +47,13 @@ jobs:
         -validity 10000 \
         -dname "CN=App,O=Dev,C=IN"
 
-    - name: Sign the APK (if exists)
+    - name: Sign & Align APK
       run: |
-        if [ -f app/build/outputs/apk/release/app-release-unsigned.apk ]; then
-          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
-          -keystore release.keystore -storepass android \
-          app/build/outputs/apk/release/app-release-unsigned.apk mykey;
-
-          zipalign -v -p 4 \
-          app/build/outputs/apk/release/app-release-unsigned.apk \
-          LauncherApp-release.apk;
+        APK=$(find app/build/outputs/apk/release -name "*-unsigned.apk" | head -n 1)
+        echo "Found APK: $APK"
+        if [ -f "$APK" ]; then
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore release.keystore -storepass android "$APK" mykey
+          zipalign -v -p 4 "$APK" LauncherApp-release.apk
         fi
 
     - name: Upload APK Artifact
