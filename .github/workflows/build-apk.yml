@@ -28,6 +28,11 @@ jobs:
     - name: Build Release APK (unsigned)
       run: ./gradlew assembleRelease
 
+    # ---- FIX: Install build-tools for zipalign ----
+    - name: Install Android Build Tools
+      run: |
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;33.0.1"
+
     - name: Generate Signing Keystore
       run: |
         keytool -genkeypair -v \
@@ -42,14 +47,18 @@ jobs:
 
     - name: Sign & Align Release APK
       run: |
-        if [ -f app/build/outputs/apk/release/app-release-unsigned.apk ]; then
-          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
-          -keystore release.keystore -storepass android \
-          app/build/outputs/apk/release/app-release-unsigned.apk mykey
+        RELEASE_APK="app/build/outputs/apk/release/app-release-unsigned.apk"
 
-          zipalign -v -p 4 \
-          app/build/outputs/apk/release/app-release-unsigned.apk \
-          LauncherApp-release.apk
+        if [ -f "$RELEASE_APK" ]; then
+          echo "Signing APK..."
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+            -keystore release.keystore -storepass android \
+            "$RELEASE_APK" mykey
+
+          echo "Zipaligning APK..."
+          $ANDROID_HOME/build-tools/33.0.1/zipalign -v -p 4 \
+            "$RELEASE_APK" \
+            LauncherApp-release.apk
         else
           echo "Release APK missing — skipping signing"
         fi
