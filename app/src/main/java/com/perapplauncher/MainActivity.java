@@ -94,7 +94,7 @@ public class MainActivity extends Activity implements AppAdapter.OnAppClickListe
         java.io.File f = new java.io.File(wrapper);
         if (!f.exists()) return false;
 
-        String cmd = "su -c "" + wrapper + " " + packageName + """;
+        String cmd = "su -c \"" + wrapper + " " + packageName + "\"";
         Process p = null;
         try {
             p = Runtime.getRuntime().exec(new String[] { "sh", "-c", cmd });
